@@ -60,7 +60,6 @@ class RDT:
     timeout = timedelta(seconds=1)
     # latest sequence number used in a packet
     seq_num = 1
-    msg_S = ''
     # buffer of bytes read from network
     byte_buffer = ''
     
