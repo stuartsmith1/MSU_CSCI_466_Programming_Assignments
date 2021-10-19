@@ -57,7 +57,7 @@ class Packet:
 
 class RDT:
     # receive timeout
-    timeout = timedelta(seconds=1)
+    timeout = timedelta(seconds=0.5)
     # latest sequence number used in a packet
     seq_num = 1
     # buffer of bytes read from network
@@ -179,7 +179,7 @@ class RDT:
             end = datetime.now()
             while True:
                 # !!! make sure to use net_rcv link to udt_send and udt_receive the in RDT receive function
-                if datetime.now() - end > timedelta(seconds=0.2):
+                if datetime.now() - end > (0.2*self.timeout):
                     break
                 byte_S = self.net_rcv.udt_receive()
                 self.byte_buffer += byte_S
@@ -206,7 +206,8 @@ class RDT:
         start = datetime.now()
         while True:
             if datetime.now() - start > self.timeout:
-                raise RDTException("timeout")
+                self.rdt_3_0_send(msg_S)
+                return
             # !!! make sure to use net_rcv link to udt_send and udt_receive the in RDT receive function
             byte_S = self.net_rcv.udt_receive()
             self.byte_buffer += byte_S
@@ -224,7 +225,7 @@ class RDT:
                 r = Packet.from_byte_S(self.byte_buffer[0:length])
             except RuntimeError:
                 self.byte_buffer = self.byte_buffer[length:]
-                self.rdt_2_1_send(msg_S)
+                self.rdt_3_0_send(msg_S)
                 return
             if r.msg_S == 'ACK':
                 self.seq_num += 1
@@ -232,13 +233,13 @@ class RDT:
                 return
             elif r.msg_S == 'NAK':
                 self.byte_buffer = self.byte_buffer[length:]
-                self.rdt_2_1_send(msg_S)
+                self.rdt_3_0_send(msg_S)
                 return
     
     def rdt_3_0_receive(self):
         start = datetime.now()
         while True:
-            if datetime.now() - start > self.timeout:
+            if datetime.now() - start > (5*self.timeout):
                 raise RDTException("timeout")
             # !!! make sure to use net_rcv link to udt_send and udt_receive the in RDT receive function
             byte_S = self.net_rcv.udt_receive()
@@ -268,7 +269,7 @@ class RDT:
             end = datetime.now()
             while True:
                 # !!! make sure to use net_rcv link to udt_send and udt_receive the in RDT receive function
-                if datetime.now() - end > timedelta(seconds=0.2):
+                if datetime.now() - end > (1.5*self.timeout):
                     break
                 byte_S = self.net_rcv.udt_receive()
                 self.byte_buffer += byte_S
@@ -282,10 +283,24 @@ class RDT:
                     # return ret_S  # not enough bytes to read the whole packet
                     continue
                 # remove the packet bytes from the buffer
-                end = datetime.now()
-                self.byte_buffer = self.byte_buffer[length:]
-                ack = Packet(self.seq_num, 'ACK')
-                self.net_snd.udt_send(ack.get_byte_S())
+                try:
+                    num = Packet.from_byte_S(self.byte_buffer[0:length])
+                except RuntimeError:
+                    nack = Packet(self.seq_num, 'NAK')
+                    self.net_snd.udt_send(nack.get_byte_S())
+                    self.byte_buffer = self.byte_buffer[length:]
+                    end = datetime.now()
+                    continue
+                if num.seq_num == p.seq_num + 1:
+                    nack = Packet(self.seq_num, 'NAK')
+                    self.net_snd.udt_send(nack.get_byte_S())
+                    self.byte_buffer = self.byte_buffer[length:]
+                    break
+                else:
+                    end = datetime.now()
+                    self.byte_buffer = self.byte_buffer[length:]
+                    ack = Packet(self.seq_num, 'ACK')
+                    self.net_snd.udt_send(ack.get_byte_S())
             return p.msg_S
 
 
