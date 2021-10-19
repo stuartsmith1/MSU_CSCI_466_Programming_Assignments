@@ -112,7 +112,6 @@ class RDT:
     
     def rdt_2_1_send(self, msg_S):
         p = Packet(self.seq_num, msg_S)
-        self.seq_num += 1
         # !!! make sure to use net_snd link to udt_send and udt_receive in the RDT send function
         self.net_snd.udt_send(p.get_byte_S())
         start = datetime.now()
@@ -132,12 +131,18 @@ class RDT:
                 # return ret_S  # not enough bytes to read the whole packet
                 continue
             # create packet from buffer content and add to return string
-            #p = Packet.from_byte_S(self.byte_buffer[0:length])
-            self.byte_buffer = self.byte_buffer[length:]
-            if length == 55:
+            try:
+                r = Packet.from_byte_S(self.byte_buffer[0:length])
+            except RuntimeError:
+                self.byte_buffer = self.byte_buffer[length:]
+                self.rdt_2_1_send(msg_S)
                 return
-            elif length == 56:
-                self.seq_num -= 1
+            if r.msg_S == 'ACK':
+                self.seq_num += 1
+                self.byte_buffer = self.byte_buffer[length:]
+                return
+            elif r.msg_S == 'NAK':
+                self.byte_buffer = self.byte_buffer[length:]
                 self.rdt_2_1_send(msg_S)
                 return
     
@@ -162,7 +167,7 @@ class RDT:
             try:
                 p = Packet.from_byte_S(self.byte_buffer[0:length])
             except RuntimeError:
-                nack = Packet(self.seq_num, 'NACK')
+                nack = Packet(self.seq_num, 'NAK')
                 self.net_snd.udt_send(nack.get_byte_S())
                 self.byte_buffer = self.byte_buffer[length:]
                 return None
@@ -170,13 +175,118 @@ class RDT:
             self.byte_buffer = self.byte_buffer[length:]
             ack = Packet(self.seq_num, 'ACK')
             self.net_snd.udt_send(ack.get_byte_S())
+
+            end = datetime.now()
+            while True:
+                # !!! make sure to use net_rcv link to udt_send and udt_receive the in RDT receive function
+                if datetime.now() - end > timedelta(seconds=0.2):
+                    break
+                byte_S = self.net_rcv.udt_receive()
+                self.byte_buffer += byte_S
+                # check if we have received enough bytes
+                if len(self.byte_buffer) < Packet.length_S_length:
+                    # return ret_S  # not enough bytes to read packet length
+                    continue
+                # extract length of packet
+                length = int(self.byte_buffer[:Packet.length_S_length])
+                if len(self.byte_buffer) < length:
+                    # return ret_S  # not enough bytes to read the whole packet
+                    continue
+                # remove the packet bytes from the buffer
+                end = datetime.now()
+                self.byte_buffer = self.byte_buffer[length:]
+                ack = Packet(self.seq_num, 'ACK')
+                self.net_snd.udt_send(ack.get_byte_S())
             return p.msg_S
-    
+
     def rdt_3_0_send(self, msg_S):
-        pass
+        p = Packet(self.seq_num, msg_S)
+        # !!! make sure to use net_snd link to udt_send and udt_receive in the RDT send function
+        self.net_snd.udt_send(p.get_byte_S())
+        start = datetime.now()
+        while True:
+            if datetime.now() - start > self.timeout:
+                raise RDTException("timeout")
+            # !!! make sure to use net_rcv link to udt_send and udt_receive the in RDT receive function
+            byte_S = self.net_rcv.udt_receive()
+            self.byte_buffer += byte_S
+            # check if we have received enough bytes
+            if len(self.byte_buffer) < Packet.length_S_length:
+                # return ret_S  # not enough bytes to read packet length
+                continue
+            # extract length of packet
+            length = int(self.byte_buffer[:Packet.length_S_length])
+            if len(self.byte_buffer) < length:
+                # return ret_S  # not enough bytes to read the whole packet
+                continue
+            # create packet from buffer content and add to return string
+            try:
+                r = Packet.from_byte_S(self.byte_buffer[0:length])
+            except RuntimeError:
+                self.byte_buffer = self.byte_buffer[length:]
+                self.rdt_2_1_send(msg_S)
+                return
+            if r.msg_S == 'ACK':
+                self.seq_num += 1
+                self.byte_buffer = self.byte_buffer[length:]
+                return
+            elif r.msg_S == 'NAK':
+                self.byte_buffer = self.byte_buffer[length:]
+                self.rdt_2_1_send(msg_S)
+                return
     
     def rdt_3_0_receive(self):
-        pass
+        start = datetime.now()
+        while True:
+            if datetime.now() - start > self.timeout:
+                raise RDTException("timeout")
+            # !!! make sure to use net_rcv link to udt_send and udt_receive the in RDT receive function
+            byte_S = self.net_rcv.udt_receive()
+            self.byte_buffer += byte_S
+            # check if we have received enough bytes
+            if len(self.byte_buffer) < Packet.length_S_length:
+                # return ret_S  # not enough bytes to read packet length
+                continue
+            # extract length of packet
+            length = int(self.byte_buffer[:Packet.length_S_length])
+            if len(self.byte_buffer) < length:
+                # return ret_S  # not enough bytes to read the whole packet
+                continue
+            # create packet from buffer content and add to return string
+            try:
+                p = Packet.from_byte_S(self.byte_buffer[0:length])
+            except RuntimeError:
+                nack = Packet(self.seq_num, 'NAK')
+                self.net_snd.udt_send(nack.get_byte_S())
+                self.byte_buffer = self.byte_buffer[length:]
+                return None
+            # remove the packet bytes from the buffer
+            self.byte_buffer = self.byte_buffer[length:]
+            ack = Packet(self.seq_num, 'ACK')
+            self.net_snd.udt_send(ack.get_byte_S())
+
+            end = datetime.now()
+            while True:
+                # !!! make sure to use net_rcv link to udt_send and udt_receive the in RDT receive function
+                if datetime.now() - end > timedelta(seconds=0.2):
+                    break
+                byte_S = self.net_rcv.udt_receive()
+                self.byte_buffer += byte_S
+                # check if we have received enough bytes
+                if len(self.byte_buffer) < Packet.length_S_length:
+                    # return ret_S  # not enough bytes to read packet length
+                    continue
+                # extract length of packet
+                length = int(self.byte_buffer[:Packet.length_S_length])
+                if len(self.byte_buffer) < length:
+                    # return ret_S  # not enough bytes to read the whole packet
+                    continue
+                # remove the packet bytes from the buffer
+                end = datetime.now()
+                self.byte_buffer = self.byte_buffer[length:]
+                ack = Packet(self.seq_num, 'ACK')
+                self.net_snd.udt_send(ack.get_byte_S())
+            return p.msg_S
 
 
 if __name__ == '__main__':
