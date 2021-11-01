@@ -35,29 +35,18 @@ class Link:
     
     # transmit a packet from the 'from' to the 'to' interface
     def tx_pkt(self):
-        seg = 0
         pkt_S = self.in_intf.get()
         if pkt_S is None:
             return  # return if no packet to transfer
         if len(pkt_S) > self.in_intf.mtu:
-            seg = 1
-            pkt_S2 = pkt_S[:5] + pkt_S[50:]
-            pkt_S = pkt_S[:50]
-            print(pkt_S)
-            print(pkt_S2)
             print('%s: packet "%s" length greater than the from interface MTU (%d)' % (self, pkt_S, self.out_intf.mtu))
-            #return  # return without transmitting if packet too big
+            return  # return without transmitting if packet too big
         if len(pkt_S) > self.out_intf.mtu:
-            seg = 1
-            pkt_S2 = pkt_S[:5] + pkt_S[50:]
-            pkt_S = pkt_S[:50]
             print('%s: packet "%s" length greater than the to interface MTU (%d)' % (self, pkt_S, self.out_intf.mtu))
-            #return  # return without transmitting if packet too big
+            return  # return without transmitting if packet too big
         # otherwise transmit the packet
         try:
             self.out_intf.put(pkt_S)
-            if seg == 1:
-                self.out_intf.put(pkt_S2)
             print('%s: transmitting packet "%s"' % (self, pkt_S))
         except queue.Full:
             print('%s: packet lost' % (self))
