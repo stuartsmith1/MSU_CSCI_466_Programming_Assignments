@@ -92,8 +92,8 @@ class Host:
         p = p.to_byte_S()
         if len(p) > 50:
             seg = 1
-            p2 = p[:6] + p[50:]
-            p = p[:50]
+            p2 = p[:6] + p[40:]
+            p = p[:40]
         print('%s: sending packet "%s" on the out interface with mtu=%d' % (self, p, self.out_intf_L[0].mtu))
         self.out_intf_L[0].put(p)  # send packets always enqueued successfully
         if seg == 1:
@@ -109,7 +109,7 @@ class Host:
                 while pkt_S2 is None:
                     pkt_S2 = self.in_intf_L[0].get()
                     continue
-                pkt_S = pkt_S + pkt_S2
+                pkt_S = pkt_S + pkt_S2[8:]
             print('%s: received packet "%s" on the in interface' % (self, pkt_S))
     
     # thread target for the host to keep receiving data
@@ -130,12 +130,13 @@ class Router:
     #@param name: friendly router name for debugging
     # @param intf_count: the number of input and output interfaces
     # @param max_queue_size: max queue length (passed to Interface)
-    def __init__(self, name, intf_count, max_queue_size):
+    def __init__(self, r_table, name, intf_count, max_queue_size):
         self.stop = False  # for thread termination
         self.name = name
         # create a list of interfaces
         self.in_intf_L = [Interface(max_queue_size) for _ in range(intf_count)]
         self.out_intf_L = [Interface(max_queue_size) for _ in range(intf_count)]
+        self.r_table = r_table
     
     # called when printing the object
     def __str__(self):
@@ -152,15 +153,15 @@ class Router:
                 # if packet exists make a forwarding decision
                 if pkt_S is not None:
                     p = NetworkPacket.from_byte_S(pkt_S)  # parse a packet out
-                    # HERE you will need to implement a lookup into the
-                    # forwarding table to find the appropriate outgoing interface
-                    # for now we assume the outgoing interface is also i
+                    l = self.r_table[i]
                     print('%s: forwarding packet "%s" from interface %d to %d with mtu %d' \
-                          % (self, p, i, i, self.out_intf_L[i].mtu))
+                          % (self, p, i, l, self.out_intf_L[i].mtu))
                     if len(p.to_byte_S()) > 30:
                         p.segment()
-                        self.out_intf_L[i].put(p.to_byte_S()[:30])
-                        self.out_intf_L[i].put(p.to_byte_S()[30:])
+                        self.out_intf_L[l].put(p.to_byte_S()[:25])
+                        self.out_intf_L[l].put(p.to_byte_S()[:6] + p.to_byte_S()[25:])
+                    else:
+                        self.out_intf_L[i].put(p.to_byte_S())
             except queue.Full:
                 print('%s: packet "%s" lost on interface %d' % (self, p, i))
                 pass
