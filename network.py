@@ -1,6 +1,7 @@
 import queue
 import threading
 from rprint import print
+import ast
 
 
 # wrapper class for a queue of packets
@@ -140,6 +141,11 @@ class Router:
         self.cost_D = cost_D  # {neighbor: {interface: cost}}
         # TODO: set up the routing table for connected hosts
         self.rt_tbl_D = {}  # {destination: {router: cost}}
+        holder = {}
+        for i in cost_D:
+            holder[str(self)] = next(iter(cost_D[i].values()))
+            self.rt_tbl_D[i] = holder
+            holder = {}
         print('%s: Initialized routing table' % self)
         self.print_routes()
     
@@ -147,6 +153,20 @@ class Router:
     def print_routes(self):
         print("Routing table at %s" % self.name)
         # TODO: print the routes as a two dimensional table
+        print('__', end='')
+        for i in range(len(self.rt_tbl_D)):
+            print('_______', end='')
+        print('')
+
+        print(str(self) + '     ', end='')
+        for i in range(len(self.rt_tbl_D)):
+            print(list(self.rt_tbl_D.keys())[i] + '     ', end='')
+
+        print('')
+        print('__', end='')
+        for i in range(len(self.rt_tbl_D)):
+            print('_______', end='')
+        print('')
         print(self.rt_tbl_D)
     
     # called when printing the object
@@ -189,9 +209,10 @@ class Router:
     def send_routes(self, i):
         # TODO: Send out a routing table update
         #  create a routing table update packet
-        p = NetworkPacket(0, 'control', 'DUMMY_ROUTING_TABLE')
+        p = NetworkPacket(0, 'control', str(self.cost_D))
         try:
             print('%s: sending routing update "%s" from interface %d' % (self, p, i))
+            # TODO: Maybe send out of all outgoing interfaces
             self.intf_L[i].put(p.to_byte_S(), 'out', True)
         except queue.Full:
             print('%s: packet "%s" lost on interface %d' % (self, p, i))
@@ -201,6 +222,10 @@ class Router:
     #  @param p Packet containing routing information
     def update_routes(self, p, i):
         # TODO: add logic to update the routing tables and
+        table_ud = ast.literal_eval(p.data_S)
+        base = {}
+        #for j in table_ud:
+            #self.rt_tbl_D[j] = base
         #  possibly send out routing updates
         print('%s: Received routing update %s from interface %d' % (self, p, i))
     
