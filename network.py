@@ -153,6 +153,10 @@ class Router:
     def print_routes(self):
         print("Routing table at %s" % self.name)
         # TODO: print the routes as a two dimensional table
+        router_count = []
+        for j in self.rt_tbl_D:
+            if str(j)[0] == 'R':
+                router_count.append(str(j))
         print('__', end='')
         for i in range(len(self.rt_tbl_D)):
             print('_______', end='')
@@ -161,8 +165,16 @@ class Router:
         print(str(self) + '     ', end='')
         for i in range(len(self.rt_tbl_D)):
             print(list(self.rt_tbl_D.keys())[i] + '     ', end='')
-
         print('')
+        for i in router_count:
+            print(i + '     ', end='')
+            for dest in self.rt_tbl_D:
+                if i in self.rt_tbl_D[dest]:
+                    print(str(self.rt_tbl_D[dest][i]) + '      ', end='')
+                else:
+                    print('  ' + '      ', end='')
+            print('')
+
         print('__', end='')
         for i in range(len(self.rt_tbl_D)):
             print('_______', end='')
@@ -222,10 +234,40 @@ class Router:
     #  @param p Packet containing routing information
     def update_routes(self, p, i):
         # TODO: add logic to update the routing tables and
-        table_ud = ast.literal_eval(p.data_S)
-        base = {}
-        #for j in table_ud:
-            #self.rt_tbl_D[j] = base
+        # add newly received routes
+        if len(self.rt_tbl_D) < 3:
+            for l in self.cost_D:
+                if int(next(iter(self.cost_D[l].keys()))) == int(i):
+                    sender = l
+            table_ud = ast.literal_eval(p.data_S)
+            holder = {}
+            for j in table_ud:
+                holder[str(sender)] = next(iter(table_ud[j].values()))
+                self.rt_tbl_D[j] = holder
+                holder = {}
+            # calculate new routes
+            router_count = []
+            for j in self.rt_tbl_D:
+                if str(j)[0] == 'R':
+                    router_count.append(str(j))
+            for j in self.rt_tbl_D:
+                for key in router_count:
+                    if key in self.rt_tbl_D[j]:
+                        continue
+                    else:
+                        if key == str(j):
+                            self.rt_tbl_D[j][key] = 0
+                        else:
+                            continue
+            for j in self.rt_tbl_D:
+                for key in router_count:
+                    if key in self.rt_tbl_D[j]:
+                        continue
+                    else:
+                        first = self.rt_tbl_D[key][next(iter(self.rt_tbl_D[j].keys()))]
+                        second = self.rt_tbl_D[j][next(iter(self.rt_tbl_D[j].keys()))]
+                        self.rt_tbl_D[j][key] = first + second
+            self.send_routes(i)
         #  possibly send out routing updates
         print('%s: Received routing update %s from interface %d' % (self, p, i))
     
