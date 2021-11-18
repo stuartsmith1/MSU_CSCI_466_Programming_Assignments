@@ -207,17 +207,17 @@ class Router:
     #  @param i Incoming interface number for packet p
     def forward_packet(self, p, i):
         try:
-            port = 0
+            port = 1
             # TODO: Here you will need to implement a lookup into the 
             #  forwarding table to find the appropriate outgoing interface
             #  for now we assume the outgoing interface is 1
             forward = min(self.rt_tbl_D[p.dst], key=self.rt_tbl_D[p.dst].get)
             routes = self.rt_tbl_D[p.dst].values()
             cost = min(routes)
-            if forward in self.cost_D:
-                port = next(iter(self.cost_D[forward].keys()))
-            elif str(forward) == str(self):
+            if str(forward) == str(self):
                 port = next(iter(self.cost_D[p.dst].keys()))
+            elif forward in self.cost_D:
+                port = next(iter(self.cost_D[forward].keys()))
             self.intf_L[port].put(p.to_byte_S(), 'out', True)
             print('%s: forwarding packet "%s" from interface %d. Using interface %d, because %s is the cheapest route with cost %s.' % (self, p, int(port), int(port), forward, cost))
         except queue.Full:
@@ -229,11 +229,12 @@ class Router:
     def send_routes(self, i):
         # TODO: Send out a routing table update
         #  create a routing table update packet
-        p = NetworkPacket(0, 'control', str(self.cost_D))
+        p = NetworkPacket(0, 'control', str(self.rt_tbl_D))
         try:
-            print('%s: sending routing update "%s" from interface %d' % (self, p, i))
+            for j in range(len(self.intf_L)):
+                print('%s: sending routing update "%s" from interface %d' % (self, p, j))
             # TODO: Maybe send out of all outgoing interfaces
-            self.intf_L[i].put(p.to_byte_S(), 'out', True)
+                self.intf_L[j].put(p.to_byte_S(), 'out', True)
         except queue.Full:
             print('%s: packet "%s" lost on interface %d' % (self, p, i))
             pass
@@ -243,7 +244,7 @@ class Router:
     def update_routes(self, p, i):
         # TODO: add logic to update the routing tables and
         # add newly received routes
-        if len(self.rt_tbl_D) < 3:
+        if len(self.rt_tbl_D) < 6:
             for l in self.cost_D:
                 if int(next(iter(self.cost_D[l].keys()))) == int(i):
                     sender = l
@@ -272,8 +273,10 @@ class Router:
                     if key in self.rt_tbl_D[j]:
                         continue
                     else:
-                        first = self.rt_tbl_D[key][next(iter(self.rt_tbl_D[j].keys()))]
-                        second = self.rt_tbl_D[j][next(iter(self.rt_tbl_D[j].keys()))]
+                        if (key in self.rt_tbl_D) and (j in self.rt_tbl_D):
+                            if (next(iter(self.rt_tbl_D[j].keys())) in self.rt_tbl_D[key]) and (next(iter(self.rt_tbl_D[j].keys())) in self.rt_tbl_D[j]):
+                                first = self.rt_tbl_D[key][next(iter(self.rt_tbl_D[j].keys()))]
+                                second = self.rt_tbl_D[j][next(iter(self.rt_tbl_D[j].keys()))]
                         self.rt_tbl_D[j][key] = first + second
             self.send_routes(i)
         #  possibly send out routing updates
