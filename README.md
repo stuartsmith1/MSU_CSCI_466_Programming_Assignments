@@ -1,46 +1,47 @@
-# CSCI 466 PA3 - Network Layer: Data Plane
+# CSCI 466 Programming Assignment - MPLS 
 
 ## Instructions
 
-Complete the following assignment by yourself, or in a group of two. 
-Submit your work on D2L into the "Programming Assignment 3" folder. 
-Please have only one member of the group submit.
+Complete the following assignment by yourself, or in a group of two.
+Submit your work on D2L into the “Programming Assignment 5” folder. 
+All partners will submit the same solution and we will only grade one solution for each group.
 
 
 ## Learning Objectives
 
 In this programming assignment you will:
 
-- Packetize streams at the network layer
-- Implement packet segmentation
-- Implement forwarding through routing tables
+- Implement MPLS forwarding on routers
+- Control forwarding paths using MPLS labels
+- Implement priority-based forwarding on routers
 
 
-## Assignment
+## Overview
 
-During this project, you will implement several key data plane functions of a router, including stream packetization, packet segmentation, and forwarding.
-The next assignment will complement these functions at the control plane.
+In this project, you will implement MPLS forwarding and priority-based forwarding at routers.
+You will also have a greater autonomy over and responsibility for the design of your protocol based on the requirements. 
 
+### Starting Code 
 
-### Starting Code
-
-The starting code for this project provides you with the implementation of several network layers that cooperate to provide end-to-end communication.
+The code provides you with the implementation several network layers that cooperate to provide end-to-end communication. 
 
 ```
-NETWORK LAYER (network.py)
-DATA LINK LAYER (link.py)
+NETWORK LAYER (network.py) 
+DATA LINK LAYER (link.py) 
 ```
 
-The code also includes `simulation.py` that manages the threads running the different network objects.
-Currently, `simulation.py` defines the following network.
+The code also includes `simulation.py` that manages the threads running the different network objects. Currently, `simulation.py` defines the following network.
 
-![network_1](https://github.com/msu-netlab/MSU_CSCI_466_PAs/blob/data_plane/images/simple.png)
+![image](images/simple.png)
+<!-- <img src="images/simple.png" alt="Drawing" style="width:400pt; height:100pt"/> -->
 
-At a high level a network defined in `simulation.py` includes hosts, routers and links.
-`Hosts` generate and receive traffic.
-`Routers` forward traffic from one `Interface` to another based on routing tables that you will implement.
-`Links` connect network interfaces of routers and hosts.
-Finally, the `LinkLayer` runs a thread to forward traffic along links.
+At a high level the network includes hosts, routers and links. 
+`Hosts` generate and receive traffic. 
+`Routers` forward packets between interfaces.
+`Links` connect network interfaces of routers and hosts. 
+Finally, the `LinkLayer` implements a thread that forwards traffic along links.
+In this assignment forwarding speed is restricted by link capacity. 
+Please consult the [video lecture](https://www.youtube.com/watch?v=nNLOUlj6MMc) for a more in-depth explanation of the code.
 
 ### Program Invocation
 
@@ -50,60 +51,97 @@ To run the starting code you may execute:
 python simulation.py
 ```
 
-The current `simulation_time` in `simulation.py` is one second.
-As the network becomes more complex and takes longer to execute, you may need to extend the simulation to allow the time for all the packets to transfer. 
-
-
-## Grading Rubric
-
-Your task is to extend the given code to implement several data link router functions.
-
-* \[2 points\] Currently `simulation.py` is configured to send three very short messages.
-  Instead, generate a message for `Host_2` that's at least 80 characters long.
-  You will notice that this messages is too large for the interface MTUs.
-  Your first task is to break this message up into two separate packets.
-
-  Implement your solution in files `link_1.py`, `network_1.py`, and `simulation_1.py`.
-
-
-* \[10 points\] The packets you created are small enough to transmit over the client's interface. 
-  However, if we change the MTU of link between `router_a` and `server` to 30, the packets will now need to be segmented.
-
-  Your task is to extend the network layer to support segmentation.
-  Study lecture notes and the book on how IP implements segmentation.
-  Extend the classes (including packet format) in `network.py` to match IP's mechanisms for packet segmentation and reconstruction. 
-
-  Implement your solution in files `link_2.py`, `network_2.py`, and `simulation_2.py`.
-
-
-* \[13 points\] The current router implementation supports very simple forwarding.
-  The router has only one input and one output interface and just forwards packets from one to the other.
-  Your tasks is to implement forwarding of packets within routers based on routing tables.
-
-  First configure `simulation.py` to reflect the following network topology.
-
-  ![network_2](https://github.com/msu-netlab/MSU_CSCI_466_PAs/blob/data_plane/images/network.png)
-
-  Second, create routing tables so that both Host 1 and Host 2 can send packets to Host 3 and Host 4 respectively.
-  The routing table for each router should be passed into the `Router` constructor, and so it should be defined in `simulation.py`.
-  The format of these tables is up to you.
-  You will also need to modify the `Router` class to forward the packets correctly between interfaces according to your routing tables.
-
-  Finally, third, configure the routing tables to forward packets from Host 1 through Router B and from Host 2 through Router C.
-  You may extend `NetworkPacket` with a source address, if you find that useful.
-
-  Implement your solution in files `link_3.py`, `network_3.py`, and `simulation_3.py`.
-
-* \[1 point\] BONUS: The communication in the network above is one directional.
-  Extend the network to carry packets both ways and have Host 3 send acknowledgements to Hosts 1 and 2.
-
-  Implement your solution in files `link_4.py`, `network_4.py`, and `simulation_4.py`.
+The current `simulation_time` in `simulation.py` is __10 seconds__ to account for the delay of packet forwarding. 
+As the network becomes more complex and takes longer to execute, you may need to extend the simulation to allow all the packets to be transfered.
 
 
 
-## What to Submit
+## Assignment
 
-You will submit the different `link.py`, `network.py`, and `simulation.py` files.
-You will also submit a link to a single YouTube video under 5 minutes in length that shows the execution of your code implementing the different functionalities outlined in the grading rubric.
+1. [10 points] Implement MPLS forwarding such that only links incident on hosts carry `NetworkPackets` and links between routers only carry `MPLSFrames`.
+
+	a. [4 points] Implement the `MPLSFrame` class to encapsulate `NetworkPackets` as MPLS frames.
+	In the lectures slides we presented the MPLS frame structure and position with respect to link (Ethernet) and network (IP) layer packets as:
+
+	![image](images/MPLS_header.png)
+
+	In this project we simplify Ethernet frame as `LinkFrame` in `link.py` and IP as `NetworkPacket` in `network.py`.
+	`LinkFrame` carries both `MPLSFrames` and `NetworkPackets` and its `type_S` field allows the network process at the `Router` to differentiate between the two and handle them appropriately.
+
+	Your task is to implement `MPLSFrame` to encapsulate `NetworkPackets`.
+	Encapsulation should take place on the first hop router according the the rules defined in `encap_tbl_D` parameter to the `Router`. 
+	The structure of that table is up to you to define. 
+	Similarly, you do not need to implement all the fields of an MPLS frame.
+	The MPLS frame should contain the label at the least. 
+	You may add experimental bits, S bit, and time to live if you choose.
+	You will need to modify `Router.process_network_packet()` to implement MPLS encapsulation.
+
+	b. [4 points] Implement MPLS forwarding based on MPLS forwarding tables passed to the `Router` constructor as `frwd_tbl_D`.
+	The structure of `frwd_tbl_D` is up to you, but the tables should contain the in label, in interface, out label, and out interface.
+	For each router, pass in correctly designed forwarding tables so that your routers achieve end-to-end connectivity.
+	You will need to modify `Router.process_queues()` and `Router.process_MPLS_frame()` to implement MPLS forwarding.
+
+	c. [2 points] Implement MPLS decapsulation at last hop router to deliver `NetworkPacket` to end hosts.
+	Decapsulation should take place according to the rules defined in `decap_tbl_D` parameter to the `Router`.
+	The structure of that table is up to you to define. 
+	You will need to modify `Router.process_MPLS_frame()` to implement MPLS decapsulation and forwarding.
+
+
+	Submit your code as `link_1.py`, `network_1.py`, and `simulation_1.py`.
+	Submit a YouTube video link showing the execution of `simulation_1.py`.
+	We will grade you based on correct forwarding actions and content of your MPLS frames.
+	Make sure that all of these are clearly visible in your output and the video.
+	
+
+
+
+2. [5 points] Implement MPLS forwarding, such that packets from different hosts follow different paths.
+Configure the more complex network shown below in `simulation.py`.
+Add transmissions from `Host 1` and `Host 2` to `Host 3` and configure MPLS tables such that routers encapsulate `NetworkPackets` as `MPLSFrames` and forward the packets from the different hosts on different paths.
+
+
+	<!-- <img src="images/complex.png" alt="Drawing" style="width:400pt; height:100pt"/> -->
+	![image](images/complex.png)  
+
+	Submit your code as `link_2.py`, `network_2.py`, and `simulation_2.py`.
+	Submit a YouTube video link showing the execution of `simulation_2.py`.
+	We will grade you based on correct forwarding actions.
+	Make sure these are clearly visible in your output and the video.
+
+3. [10 points] Implement strict priority forwarding on the MPLS routers. 
+
+	a. [2 points] Recall that the IP header has a type of service (TOS) field that carries packet priority.
+	`NetworkPacket` constructor in this assignment has a `priority` argument, though it is currently unused.
+	The `udt_send()` function in `simulation.py` sends packet with priorities 0 and 1. 
+	Assume higher number priorities are higher priorities, i.e. 1 is higher than 0. 
+	Extend `NetworkPacket` to carry the priority number with which it was sent.
+
+	b. [3 points] Recall that forwarding time in this assignment (at the link layer) accounts for link capacities.
+	You will notice a bottleneck at `Router B` in problem 1, where queued packets take a while to offload.
+	Implement a similar bottleneck at `Router D` in the network from problem 2.
+	Change the program output to show how many packets of each priority remain queued at each router.
+	You may inspect the priority in the encapsulated `NetworkPackets` to do so, or devise another method.
+
+	c. [5 points] Implement strict priority forwarding at each router.
+	While in 3.b you may 'cheat' by looking at `NetworkPacket` priority, MPLS forwarding should be done while looking only at the MPLS header.
+	However, the MPLS header does not carry a priority field and you should not extend it to do so.
+	Devise and implement another method, such that the MPLS routers encapsulate `NetworkPackets` at the edge and forward them (on different paths as in problem 2) with strict priority.
+
+	Submit your code as `link_3.py`, `network_3.py`, and `simulation_3.py`.
+	Submit a YouTube video link showing the execution of `simulation_3.py`.
+	We will grade you based on correct implementation of strict priority forwarding in MPLS.
+	Make sure these to explain your approach to 3.c and clearly show that you achieve strict priority forwarding in your output and the video.
+
+
+
+4. [1 point] BONUS: Implement Weighted fair queuing (WFQ) instead of strict priority in question 3.
+
+	Submit `link_4.py`, `network_4.py`, and `simulation_4.py`.
+
+
+5. [1 point] BONUS: Implement a central controller to automatically configure MPLS forwarding tables in question 2 based on a global knowledge of network topology. 
+
+	Submit `link_5.py`, `network_5.py`, and `simulation_5.py`.
+
 
 

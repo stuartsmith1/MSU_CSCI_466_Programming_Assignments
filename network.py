@@ -1,118 +1,121 @@
-"""
-Created on Oct 12, 2016
-
-@author: mwittie
-"""
 import queue
 import threading
+from link import LinkFrame
 from rprint import print
 
 
-# wrapper class for a queue of packets
+#  wrapper class for a queue of packets
 class Interface:
-    # @param max_queue_size - the maximum size of the queue storing packets
-    #  @param mtu - the maximum transmission unit on this interface
-    def __init__(self, max_queue_size=0):
-        self.queue = queue.Queue(max_queue_size)
-        self.mtu = 1
+    #  @param maxsize - the maximum size of the queue storing packets
+    #  @param capacity - the capacity of the link in bps
+    def __init__(self, maxsize=0, capacity=500):
+        self.in_queue = queue.Queue(maxsize);
+        self.out_queue = queue.Queue(maxsize);
+        self.capacity = capacity  # serialization rate
+        self.next_avail_time = 0  # the next time the interface can transmit a packet
     
     # get packet from the queue interface
-    def get(self):
+    # @param in_or_out - use 'in' or 'out' interface
+    def get(self, in_or_out):
         try:
-            return self.queue.get(False)
+            if in_or_out == 'in':
+                pkt_S = self.in_queue.get(False)
+                # if pkt_S is not None:
+                #     print('getting packet from the IN queue')
+                return pkt_S
+            else:
+                pkt_S = self.out_queue.get(False)
+                # if pkt_S is not None:
+                #     print('getting packet from the OUT queue')
+                return pkt_S
         except queue.Empty:
             return None
     
     # put the packet into the interface queue
     # @param pkt - Packet to be inserted into the queue
+    # @param in_or_out - use 'in' or 'out' interface
     # @param block - if True, block until room in queue, if False may throw queue.Full exception
-    def put(self, pkt, block=False):
-        self.queue.put(pkt, block)
+    def put(self, pkt, in_or_out, block=False):
+        if in_or_out == 'out':
+            # print('putting packet in the OUT queue')
+            self.out_queue.put(pkt, block)
+        else:
+            # print('putting packet in the IN queue')
+            self.in_queue.put(pkt, block)
 
 
-# Implements a network layer packet (different from the RDT packet
-# from programming assignment 2).
-# NOTE: This class will need to be extended to for the packet to include
+#  Implements a network layer packet
+# NOTE: You will need to extend this class for the packet to include
 # the fields necessary for the completion of this assignment.
 class NetworkPacket:
-    # packet encoding lengths
-    dst_addr_S_length = 5
+    #  packet encoding lengths
+    dst_S_length = 5
     
-    #@param dst_addr: address of the destination host
+    # @param dst: address of the destination host
     # @param data_S: packet payload
-    def __init__(self, dst_addr, data_S, seg=1):
-        self.dst_addr = dst_addr
+    # @param priority: packet priority
+    def __init__(self, dst, data_S, priority=0):
+        self.dst = dst
         self.data_S = data_S
-        self.seg = seg
+        # TODO: add priority to the packet class
     
-    # called when printing the object
+    #  called when printing the object
     def __str__(self):
         return self.to_byte_S()
     
-    # convert packet to a byte string for transmission over links
+    #  convert packet to a byte string for transmission over links
     def to_byte_S(self):
-        byte_S = str(self.seg)
-        byte_S += str(self.dst_addr).zfill(self.dst_addr_S_length)
-        byte_S += str(self.data_S)
+        byte_S = str(self.dst).zfill(self.dst_S_length)
+        byte_S += self.data_S
         return byte_S
-
-    def segment(self):
-        self.seg = 2
-
-    # extract a packet object from a byte string
+    
+    #  extract a packet object from a byte string
     # @param byte_S: byte string representation of the packet
     @classmethod
     def from_byte_S(self, byte_S):
-        seg = int(byte_S[0])
-        dst_addr = int(byte_S[1: NetworkPacket.dst_addr_S_length])
-        data_S = byte_S[NetworkPacket.dst_addr_S_length:]
-        return self(dst_addr, data_S, seg)
+        dst = byte_S[0: NetworkPacket.dst_S_length].strip('0')
+        data_S = byte_S[NetworkPacket.dst_S_length:]
+        return self(dst, data_S)
 
 
-# Implements a network host for receiving and transmitting data
+#  Implements a network host for receiving and transmitting data
 class Host:
     
-    #@param addr: address of this node represented as an integer
+    # @param addr: address of this node represented as an integer
     def __init__(self, addr):
         self.addr = addr
-        self.in_intf_L = [Interface()]
-        self.out_intf_L = [Interface()]
+        self.intf_L = [Interface()]
         self.stop = False  # for thread termination
     
-    # called when printing the object
+    #  called when printing the object
     def __str__(self):
-        return 'Host_%s' % (self.addr)
+        return self.addr
     
-    # create a packet and enqueue for transmission
-    # @param dst_addr: destination address for the packet
+    #  create a packet and enqueue for transmission
+    # @param dst: destination address for the packet
     # @param data_S: data being transmitted to the network layer
-    def udt_send(self, dst_addr, data_S):
-        seg = 0
-        p = NetworkPacket(dst_addr, data_S)
-        p = p.to_byte_S()
-        if len(p) > 50:
-            seg = 1
-            p2 = p[:6] + p[40:]
-            p = p[:40]
-        print('%s: sending packet "%s" on the out interface with mtu=%d' % (self, p, self.out_intf_L[0].mtu))
-        self.out_intf_L[0].put(p)  # send packets always enqueued successfully
-        if seg == 1:
-            print('%s: sending packet "%s" on the out interface with mtu=%d' % (self, p2, self.out_intf_L[0].mtu))
-            self.out_intf_L[0].put(p2)
+    # @param priority: packet priority
+    def udt_send(self, dst, data_S, priority=0):
+        pkt = NetworkPacket(dst, data_S)
+        print('%s: sending packet "%s" with priority %d' % (self, pkt, priority))
+        # encapsulate network packet in a link frame (usually would be done by the OS)
+        fr = LinkFrame('Network', pkt.to_byte_S())
+        # enque frame onto the interface for transmission
+        self.intf_L[0].put(fr.to_byte_S(), 'out')
+        
+        #  receive frame from the link layer
     
-    # receive packet from the network layer
     def udt_receive(self):
-        pkt_S = self.in_intf_L[0].get()
-        if pkt_S is not None:
-            if pkt_S[0] == '2':
-                pkt_S2 = None
-                while pkt_S2 is None:
-                    pkt_S2 = self.in_intf_L[0].get()
-                    continue
-                pkt_S = pkt_S + pkt_S2[8:]
-            print('%s: received packet "%s" on the in interface' % (self, pkt_S))
+        fr_S = self.intf_L[0].get('in')
+        if fr_S is None:
+            return
+        # decapsulate the network packet
+        fr = LinkFrame.from_byte_S(fr_S)
+        assert (fr.type_S == 'Network')  # should be receiving network packets by hosts
+        pkt_S = fr.data_S
+        print('%s: received packet "%s"' % (self, pkt_S))
     
-    # thread target for the host to keep receiving data
+    #  thread target for the host to keep receiving data
     def run(self):
         print(threading.currentThread().getName() + ': Starting')
         while True:
@@ -124,53 +127,85 @@ class Host:
                 return
 
 
-# Implements a multi-interface router described in class
+#  Implements a multi-interface router
 class Router:
     
-    #@param name: friendly router name for debugging
-    # @param intf_count: the number of input and output interfaces
+    # @param name: friendly router name for debugging
+    # @param intf_capacity_L: capacities of outgoing interfaces in bps 
+    # @param encap_tbl_D: table used to encapsulate network packets into MPLS frames
+    # @param frwd_tbl_D: table used to forward MPLS frames
+    # @param decap_tbl_D: table used to decapsulate network packets from MPLS frames
     # @param max_queue_size: max queue length (passed to Interface)
-    def __init__(self, r_table, name, intf_count, max_queue_size):
+    def __init__(self, name, intf_capacity_L, encap_tbl_D, frwd_tbl_D, decap_tbl_D, max_queue_size):
         self.stop = False  # for thread termination
         self.name = name
         # create a list of interfaces
-        self.in_intf_L = [Interface(max_queue_size) for _ in range(intf_count)]
-        self.out_intf_L = [Interface(max_queue_size) for _ in range(intf_count)]
-        self.r_table = r_table
+        self.intf_L = [Interface(max_queue_size, intf_capacity_L[i]) for i in range(len(intf_capacity_L))]
+        # save MPLS tables
+        self.encap_tbl_D = encap_tbl_D
+        self.frwd_tbl_D = frwd_tbl_D
+        self.decap_tbl_D = decap_tbl_D
     
-    # called when printing the object
+    #  called when printing the object
     def __str__(self):
-        return 'Router_%s' % (self.name)
+        return self.name
     
-    # look through the content of incoming interfaces and forward to
-    # appropriate outgoing interfaces
-    def forward(self):
-        for i in range(len(self.in_intf_L)):
-            pkt_S = None
-            try:
-                # get packet from interface i
-                pkt_S = self.in_intf_L[i].get()
-                # if packet exists make a forwarding decision
-                if pkt_S is not None:
-                    p = NetworkPacket.from_byte_S(pkt_S)  # parse a packet out
-                    l = self.r_table[i]
-                    print('%s: forwarding packet "%s" from interface %d to %d with mtu %d' \
-                          % (self, p, i, l, self.out_intf_L[i].mtu))
-                    if len(p.to_byte_S()) > 30:
-                        p.segment()
-                        self.out_intf_L[l].put(p.to_byte_S()[:25])
-                        self.out_intf_L[l].put(p.to_byte_S()[:6] + p.to_byte_S()[25:])
-                    else:
-                        self.out_intf_L[i].put(p.to_byte_S())
-            except queue.Full:
-                print('%s: packet "%s" lost on interface %d' % (self, p, i))
-                pass
+    #  look through the content of incoming interfaces and
+    # process data and control packets
+    def process_queues(self):
+        for i in range(len(self.intf_L)):
+            fr_S = None  # make sure we are starting the loop with a blank frame
+            fr_S = self.intf_L[i].get('in')  # get frame from interface i
+            if fr_S is None:
+                continue  # no frame to process yet
+            # decapsulate the packet
+            fr = LinkFrame.from_byte_S(fr_S)
+            pkt_S = fr.data_S
+            # process the packet as network, or MPLS
+            if fr.type_S == "Network":
+                p = NetworkPacket.from_byte_S(pkt_S)  # parse a packet out
+                self.process_network_packet(p, i)
+            elif fr.type_S == "MPLS":
+                # TODO: handle MPLS frames
+                # m_fr = MPLSFrame.from_byte_S(pkt_S) #parse a frame out
+                # for now, we just relabel the packet as an MPLS frame without encapsulation
+                m_fr = p
+                # send the MPLS frame for processing
+                self.process_MPLS_frame(m_fr, i)
+            else:
+                raise ('%s: unknown frame type: %s' % (self, fr.type))
     
-    # thread target for the host to keep forwarding data
+    #  process a network packet incoming to this router
+    #  @param p Packet to forward
+    #  @param i Incoming interface number for packet p
+    def process_network_packet(self, pkt, i):
+        # TODO: encapsulate the packet in an MPLS frame based on self.encap_tbl_D
+        # for now, we just relabel the packet as an MPLS frame without encapsulation
+        m_fr = pkt
+        print('%s: encapsulated packet "%s" as MPLS frame "%s"' % (self, pkt, m_fr))
+        # send the encapsulated packet for processing as MPLS frame
+        self.process_MPLS_frame(m_fr, i)
+    
+    #  process an MPLS frame incoming to this router
+    #  @param m_fr: MPLS frame to process
+    #  @param i Incoming interface number for the frame
+    def process_MPLS_frame(self, m_fr, i):
+        # TODO: implement MPLS forward, or MPLS decapsulation if this is the last hop router for the path
+        print('%s: processing MPLS frame "%s"' % (self, m_fr))
+        # for now forward the frame out interface 1
+        try:
+            fr = LinkFrame('Network', m_fr.to_byte_S())
+            self.intf_L[1].put(fr.to_byte_S(), 'out', True)
+            print('%s: forwarding frame "%s" from interface %d to %d' % (self, fr, i, 1))
+        except queue.Full:
+            print('%s: frame "%s" lost on interface %d' % (self, m_fr, i))
+            pass
+    
+    #  thread target for the host to keep forwarding data
     def run(self):
         print(threading.currentThread().getName() + ': Starting')
         while True:
-            self.forward()
+            self.process_queues()
             if self.stop:
                 print(threading.currentThread().getName() + ': Ending')
                 return
