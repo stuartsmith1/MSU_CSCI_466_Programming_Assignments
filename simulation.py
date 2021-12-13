@@ -6,7 +6,7 @@ from rprint import print
 
 # configuration parameters
 router_queue_size = 0  # 0 means unlimited
-simulation_time = 30  # give the network sufficient time to execute transfers
+simulation_time = 10  # give the network sufficient time to execute transfers
 
 if __name__ == '__main__':
     object_L = []  # keeps track of objects, so we can kill their threads at the end
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     frwd_tbl_D = {'Z': ['A', 'H2', 1], 'A': ['A', 'RA', 1], 'B': ['A', 'RA', 1], 'C': ['A', 'RA', 1]}
     decap_tbl_D = {'A': False, 'Z': False, 'B': True}
     router_b = Router(name='RB',
-                      intf_capacity_L=[500, 100],
+                      intf_capacity_L=[500, 500],
                       encap_tbl_D=encap_tbl_D,
                       frwd_tbl_D=frwd_tbl_D,
                       decap_tbl_D=decap_tbl_D,
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     frwd_tbl_D = {'Z': ['A', 'H2', 1], 'A': ['A', 'RA', 1], 'B': ['A', 'RA', 1], 'C': ['A', 'RA', 1]}
     decap_tbl_D = {'A': False, 'Z': False, 'B': True}
     router_c = Router(name='RC',
-                      intf_capacity_L=[500, 100],
+                      intf_capacity_L=[500, 500],
                       encap_tbl_D=encap_tbl_D,
                       frwd_tbl_D=frwd_tbl_D,
                       decap_tbl_D=decap_tbl_D,
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     frwd_tbl_D = {'Z': ['A', 'H2', 1], 'A': ['Z', 'RA', 2], 'B': ['A', 'RA', 1], 'C': ['A', 'RA', 1]}
     decap_tbl_D = {'C': True, 'B': True, 'A': True, 'Z': True, 'H': False}
     router_d = Router(name='RD',
-                      intf_capacity_L=[500, 100, 100],
+                      intf_capacity_L=[100, 100, 100],
                       encap_tbl_D=encap_tbl_D,
                       frwd_tbl_D=frwd_tbl_D,
                       decap_tbl_D=decap_tbl_D,
@@ -86,10 +86,10 @@ if __name__ == '__main__':
         t.start()
 
     # create some send events
-    for i in range(2):
+    for i in range(1):
         priority = i % 2
         host_1.udt_send('H3', 'MESSAGE_%d_FROM_H1' % i, priority)
-    for i in range(2):
+    for i in range(1):
         priority = i % 2
         host_2.udt_send('H3', 'MESSAGE_%d_FROM_H2' % i, priority)
     
